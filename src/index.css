@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply font-sans text-surface-900 bg-surface-50;
+    line-height: 1.6;
+  }
+
+  /* Dark mode base */
+  .dark body {
+    @apply text-surface-100 bg-surface-950;
+  }
+
+  ::selection {
+    @apply bg-brand-200 text-surface-900;
+  }
+
+  .dark ::selection {
+    @apply bg-brand-700 text-surface-50;
+  }
+}
+
+@layer components {
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-surface-300 rounded-full;
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    @apply bg-surface-700;
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply bg-white/80 backdrop-blur-xl;
+  }
+
+  .dark .glass {
+    @apply bg-surface-900/80;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
