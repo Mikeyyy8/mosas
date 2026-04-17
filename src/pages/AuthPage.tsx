@@ -5,6 +5,7 @@ import { Mail, Lock, User, Eye, EyeOff, Package } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { toast } from "sonner";
 import { useThrottle } from "@/hooks/useThrottle";
+import LoadingSpinner from "@/components/LoadingSpinner";
 
 const AuthPage = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -13,10 +14,6 @@ const AuthPage = () => {
 
   const { login, signup, isLoading, user } = useAuthStore();
   const navigate = useNavigate();
-
-  if (user) {
-    return <Navigate to="/" replace />;
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,6 +32,11 @@ const AuthPage = () => {
   };
 
   const throttledSubmit = useThrottle((e: React.FormEvent) => handleSubmit(e), 2000);
+
+  if (user) {
+    return <Navigate to="/" replace />;
+  }
+
 
   return (
     <div className="animate-fade-in min-h-[80vh] flex items-center justify-center px-4 py-12">
@@ -132,13 +134,15 @@ const AuthPage = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 bg-surface-900 dark:bg-surface-100 text-white dark:text-surface-900 text-sm font-medium rounded-xl hover:bg-surface-800 dark:hover:bg-surface-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full h-11 flex items-center justify-center bg-surface-900 dark:bg-surface-100 text-white dark:text-surface-900 text-sm font-medium rounded-xl hover:bg-surface-800 dark:hover:bg-surface-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading
-                ? "Please wait..."
-                : isLogin
-                ? "Sign In"
-                : "Create Account"}
+              {isLoading ? (
+                <LoadingSpinner size="sm" />
+              ) : isLogin ? (
+                "Sign In"
+              ) : (
+                "Create Account"
+              )}
             </button>
           </form>
 

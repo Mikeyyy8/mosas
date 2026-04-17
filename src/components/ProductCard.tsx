@@ -4,6 +4,8 @@ import { Link } from "react-router-dom";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useCartStore } from "@/stores/useCartStore";
 import { toast } from "sonner";
+import { useState } from "react";
+import LoadingSpinner from "@/components/LoadingSpinner";
 
 interface Product {
   _id: string;
@@ -24,6 +26,7 @@ interface ProductCardProps {
 const ProductCard = ({ product }: ProductCardProps) => {
   const user = useAuthStore((s) => s.user);
   const addToCart = useCartStore((s) => s.addToCart);
+  const [isAdding, setIsAdding] = useState(false);
 
   const salePrice =
     product.isOnSale && product.discountPercent
@@ -37,11 +40,14 @@ const ProductCard = ({ product }: ProductCardProps) => {
       toast.error("Please sign in to add items to cart");
       return;
     }
+    setIsAdding(true);
     try {
       await addToCart(product._id);
       toast.success("Added to cart");
     } catch (err: any) {
       toast.error(typeof err === "string" ? err : "Failed to add to cart");
+    } finally {
+      setIsAdding(false);
     }
   };
 
@@ -96,10 +102,11 @@ const ProductCard = ({ product }: ProductCardProps) => {
             </div>
             <button
               onClick={handleAddToCart}
-              className="p-2 rounded-xl bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-brand-500 hover:text-white transition-all duration-200"
+              disabled={isAdding}
+              className="p-2 rounded-xl bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-brand-500 hover:text-white transition-all duration-200 disabled:opacity-50"
               aria-label={`Add ${product.name} to cart`}
             >
-              <ShoppingBag className="w-4 h-4" />
+              {isAdding ? <LoadingSpinner size="sm" /> : <ShoppingBag className="w-4 h-4" />}
             </button>
           </div>
         </div>

@@ -25,6 +25,7 @@ const ProductDetailPage = () => {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [added, setAdded] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
 
   const user = useAuthStore((s) => s.user);
   const addToCart = useCartStore((s) => s.addToCart);
@@ -49,6 +50,7 @@ const ProductDetailPage = () => {
       return;
     }
     if (!product) return;
+    setIsAdding(true);
     try {
       await addToCart(product._id);
       setAdded(true);
@@ -56,6 +58,8 @@ const ProductDetailPage = () => {
       setTimeout(() => setAdded(false), 2000);
     } catch (err: any) {
       toast.error(typeof err === "string" ? err : "Failed to add to cart");
+    } finally {
+      setIsAdding(false);
     }
   };
 
@@ -149,14 +153,16 @@ const ProductDetailPage = () => {
 
             <button
               onClick={handleAddToCart}
-              disabled={added}
+              disabled={added || isAdding}
               className={`mt-8 inline-flex items-center justify-center gap-2 px-6 py-3.5 text-sm font-medium rounded-xl transition-all duration-200 ${
                 added
                   ? "bg-green-500 text-white"
                   : "bg-surface-900 dark:bg-surface-100 text-white dark:text-surface-900 hover:bg-surface-800 dark:hover:bg-surface-200"
-              }`}
+              } disabled:opacity-50`}
             >
-              {added ? (
+              {isAdding ? (
+                <LoadingSpinner size="sm" />
+              ) : added ? (
                 <>
                   <Check className="w-4 h-4" />
                   Added to Cart

@@ -14,6 +14,7 @@ const CartPage = () => {
   const { user, updateProfile } = useAuthStore();
   
   const [showAddressForm, setShowAddressForm] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [checkoutData, setCheckoutData] = useState({
     phoneNumber: "",
     address: "",
@@ -49,6 +50,7 @@ const CartPage = () => {
   };
 
   const executeStripeCheckout = async () => {
+    setIsCheckingOut(true);
     try {
       const products = items
         .filter((item) => item.product !== null)
@@ -67,6 +69,8 @@ const CartPage = () => {
       }
     } catch (err: any) {
       toast.error("Checkout failed. Please try again.");
+    } finally {
+      setIsCheckingOut(false);
     }
   };
 
@@ -239,10 +243,17 @@ const CartPage = () => {
 
               <button
                 onClick={throttledCheckout}
-                className="w-full mt-6 inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-brand-500 text-white text-sm font-medium rounded-xl hover:bg-brand-600 transition-colors"
+                disabled={isCheckingOut}
+                className="w-full mt-6 inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-brand-500 text-white text-sm font-medium rounded-xl hover:bg-brand-600 transition-colors disabled:opacity-50"
               >
-                Checkout
-                <ArrowRight className="w-4 h-4" />
+                {isCheckingOut ? (
+                  <LoadingSpinner size="sm" />
+                ) : (
+                  <>
+                    Checkout
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </div>
           </div>
