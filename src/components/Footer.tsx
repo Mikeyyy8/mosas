@@ -25,7 +25,7 @@ const Footer = () => {
               <ul className="space-y-3">
                 <li className="flex items-start gap-3 text-sm text-surface-500 dark:text-surface-400">
                   <MapPin className="w-4 h-4 mt-0.5 text-brand-500" />
-                  <span>123 Baby Street, Nursery Lane, <br />Parenting City, PC 12345</span>
+                  <span>Omonile bus stop, Old Akute Road, Obawole, Lagos</span>
                 </li>
                 <li className="flex items-center gap-3 text-sm text-surface-500 dark:text-surface-400">
                   <Mail className="w-4 h-4 text-brand-500" />

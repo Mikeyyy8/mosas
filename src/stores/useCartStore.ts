@@ -20,7 +20,7 @@ interface CartState {
   items: CartItem[];
   isLoading: boolean;
 
-  fetchCart: () => Promise<void>;
+  fetchCart: (showLoading?: boolean) => Promise<void>;
   addToCart: (productId: string) => Promise<void>;
   removeFromCart: (productId: string) => Promise<void>;
   updateQuantity: (productId: string, quantity: number) => Promise<void>;
@@ -33,8 +33,8 @@ export const useCartStore = create<CartState>((set, get) => ({
   items: [],
   isLoading: false,
 
-  fetchCart: async () => {
-    set({ isLoading: true });
+  fetchCart: async (showLoading = true) => {
+    if (showLoading) set({ isLoading: true });
     try {
       const res = await api.get("/cart");
       set({ items: res.data, isLoading: false });
@@ -46,26 +46,40 @@ export const useCartStore = create<CartState>((set, get) => ({
   addToCart: async (productId) => {
     try {
       await api.post("/cart", { productId });
-      await get().fetchCart();
+      await get().fetchCart(false);
     } catch (error: any) {
       throw error.response?.data?.message || "Failed to add item";
     }
   },
 
   removeFromCart: async (productId) => {
+    const previousItems = get().items;
+    set((state) => ({
+      items: state.items.filter((item) => item.product._id !== productId),
+    }));
+
     try {
       await api.delete(`/cart/${productId}`, { data: { productId } });
-      await get().fetchCart();
+      await get().fetchCart(false);
     } catch (error: any) {
+      set({ items: previousItems });
       throw error.response?.data?.message || "Failed to remove item";
     }
   },
 
   updateQuantity: async (productId, quantity) => {
+    const previousItems = get().items;
+    set((state) => ({
+      items: state.items.map((item) =>
+        item.product?._id === productId ? { ...item, quantity } : item
+      ),
+    }));
+
     try {
       await api.put(`/cart/${productId}`, { quantity });
-      await get().fetchCart();
+      await get().fetchCart(false);
     } catch (error: any) {
+      set({ items: previousItems });
       throw error.response?.data?.message || "Failed to update quantity";
     }
   },

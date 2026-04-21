@@ -15,6 +15,7 @@ const CartPage = () => {
   
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [updatingItems, setUpdatingItems] = useState<Set<string>>(new Set());
   const [checkoutData, setCheckoutData] = useState({
     phoneNumber: "",
     address: "",
@@ -83,6 +84,41 @@ const CartPage = () => {
   };
 
   const throttledCheckout = useThrottle(handleCheckout, 2000);
+
+  const handleUpdateQuantity = async (productId: string, newQuantity: number) => {
+    if (updatingItems.has(productId)) return;
+    
+    setUpdatingItems(prev => new Set(prev).add(productId));
+    try {
+      await updateQuantity(productId, newQuantity);
+    } catch (error: any) {
+      toast.error(error || "Failed to update quantity");
+    } finally {
+      setTimeout(() => {
+        setUpdatingItems(prev => {
+          const next = new Set(prev);
+          next.delete(productId);
+          return next;
+        });
+      }, 300);
+    }
+  };
+
+  const handleRemoveFromCart = async (productId: string) => {
+    if (updatingItems.has(productId)) return;
+    
+    setUpdatingItems(prev => new Set(prev).add(productId));
+    try {
+      await removeFromCart(productId);
+    } catch (error: any) {
+      toast.error(error || "Failed to remove item");
+      setUpdatingItems(prev => {
+        const next = new Set(prev);
+        next.delete(productId);
+        return next;
+      });
+    }
+  };
 
   const handleSaveAndCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,10 +216,11 @@ const CartPage = () => {
                         <button
                           onClick={() =>
                             item.quantity === 1
-                              ? removeFromCart(item.product._id)
-                              : updateQuantity(item.product._id, item.quantity - 1)
+                              ? handleRemoveFromCart(item.product._id)
+                              : handleUpdateQuantity(item.product._id, item.quantity - 1)
                           }
-                          className="p-1.5 rounded-lg bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors"
+                          disabled={updatingItems.has(item.product._id)}
+                          className="p-1.5 rounded-lg bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
@@ -192,9 +229,10 @@ const CartPage = () => {
                         </span>
                         <button
                           onClick={() =>
-                            updateQuantity(item.product._id, item.quantity + 1)
+                            handleUpdateQuantity(item.product._id, item.quantity + 1)
                           }
-                          className="p-1.5 rounded-lg bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors"
+                          disabled={updatingItems.has(item.product._id)}
+                          className="p-1.5 rounded-lg bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>
@@ -205,8 +243,9 @@ const CartPage = () => {
                           ₦{(price * item.quantity).toFixed(2)}
                         </span>
                         <button
-                          onClick={() => removeFromCart(item.product._id)}
-                          className="p-1.5 rounded-lg text-surface-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          onClick={() => handleRemoveFromCart(item.product._id)}
+                          disabled={updatingItems.has(item.product._id)}
+                          className="p-1.5 rounded-lg text-surface-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
