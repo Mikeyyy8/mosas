@@ -3,24 +3,24 @@ import { ArrowLeft } from "lucide-react";
 
 const NotFoundPage = () => {
   return (
-    <div className="animate-fade-in min-h-[70vh] flex items-center justify-center px-4">
+    <div className="animate-fade-in grid min-h-[70vh] place-items-center px-5">
       <div className="text-center">
-        <p className="text-7xl font-display font-bold text-surface-200 dark:text-surface-800">
-          404
-        </p>
-        <h1 className="mt-4 text-xl font-semibold text-surface-900 dark:text-surface-100">
+        <p className="eyebrow">Error 404</p>
+        <h1 className="mt-4 font-display text-4xl font-extrabold text-surface-900 sm:text-5xl">
           Page not found
         </h1>
-        <p className="mt-2 text-surface-500 dark:text-surface-400">
-          The page you're looking for doesn't exist.
+        <p className="mx-auto mt-3 max-w-sm text-surface-500 text-pretty">
+          The page you're looking for has moved, or never existed in the first place.
         </p>
-        <Link
-          to="/"
-          className="inline-flex items-center gap-2 mt-6 px-5 py-2.5 text-sm font-medium text-surface-900 dark:text-surface-100 bg-surface-100 dark:bg-surface-800 rounded-xl hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Go home
-        </Link>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <Link to="/" className="btn btn-primary">
+            <ArrowLeft className="w-4 h-4" strokeWidth={1.75} />
+            Go home
+          </Link>
+          <Link to="/products" className="btn btn-secondary">
+            Browse products
+          </Link>
+        </div>
       </div>
     </div>
   );

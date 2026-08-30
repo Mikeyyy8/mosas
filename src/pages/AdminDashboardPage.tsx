@@ -1,21 +1,13 @@
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import {
-  Plus,
-  Trash2,
-  Package,
-  Users,
-  DollarSign,
-  TrendingUp,
-  X,
-  Upload,
-  ClipboardList,
-  ChevronRight,
-} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Plus, Trash2, X, ClipboardList, Package } from "lucide-react";
 import api from "@/lib/axios";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { formatPrice, formatDate } from "@/lib/format";
 import { toast } from "sonner";
 import { useThrottle } from "@/hooks/useThrottle";
+import ImageUploadField from "@/components/ImageUploadField";
+import ShippingZonesPanel from "@/components/ShippingZonesPanel";
 
 interface Product {
   _id: string;
@@ -43,33 +35,68 @@ interface OrderItem {
 
 interface Order {
   _id: string;
-  user: { _id: string; name: string; email: string };
+  // Null for a guest checkout — `guest` carries the contact details instead.
+  user: { _id: string; name: string; email: string } | null;
+  guest: { name: string; email: string; phoneNumber?: string } | null;
   items: OrderItem[];
   totalAmount: number;
   status: string;
+  paymentStatus: "pending" | "paid" | "failed" | "expired" | "refunded";
+  paymentProvider: "paystack" | "opay" | "bank_transfer";
+  paymentReference: string;
   createdAt: string;
 }
 
 const CATEGORIES = ["Clothes", "Gear", "Nursery", "Toys", "Food", "Essentials", "Safety", "Bath"];
 
+const EMPTY_FORM = {
+  name: "",
+  description: "",
+  price: "",
+  image: "",
+  imageKey: "",
+  category: "",
+  isFeatured: false,
+  isOnSale: false,
+  discountPercent: "0",
+};
+
+const STATUS_STYLES: Record<string, string> = {
+  awaiting_payment: "",
+  pending: "",
+  processing: "",
+  shipped: "",
+  delivered: "",
+  cancelled: "",
+};
+
+const PAYMENT_STYLES: Record<string, string> = {
+  paid: "",
+  pending: "",
+  failed: "",
+  expired: "",
+  refunded: "",
+};
+
+const PROVIDER_LABELS: Record<string, string> = {
+  paystack: "Paystack",
+  opay: "OPay",
+  bank_transfer: "Transfer",
+};
+
+// The server rejects anything else, and refuses to move an unpaid order past cancelled.
+const FULFILMENT_OPTIONS = ["pending", "processing", "shipped", "delivered", "cancelled"];
+
 const AdminDashboardPage = () => {
-  const [activeTab, setActiveTab] = useState<"products" | "orders">("products");
+  const [activeTab, setActiveTab] = useState<"products" | "orders" | "shipping">("products");
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    price: "",
-    image: "",
-    category: "",
-    isFeatured: false,
-    isOnSale: false,
-    discountPercent: "0",
-  });
+  const [formData, setFormData] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
+  const [updatingOrder, setUpdatingOrder] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -85,7 +112,8 @@ const AdminDashboardPage = () => {
       ]);
       setProducts(productsRes.data.products || []);
       setAnalytics(analyticsRes.data);
-      setOrders(ordersRes.data || []);
+      // The orders endpoint is paginated, so the list lives under `orders`.
+      setOrders(ordersRes.data.orders || []);
     } catch {
       toast.error("Failed to load dashboard data");
     } finally {
@@ -93,8 +121,33 @@ const AdminDashboardPage = () => {
     }
   };
 
+  const handleUpdateOrderStatus = async (orderId: string, status: string) => {
+    const previous = orders;
+    setUpdatingOrder(orderId);
+    // Optimistic, because the dropdown snapping back on a slow network reads as a
+    // failure even when the write succeeds.
+    setOrders((current) =>
+      current.map((order) => (order._id === orderId ? { ...order, status } : order))
+    );
+
+    try {
+      await api.patch(`/orders/${orderId}/status`, { status });
+      toast.success(`Order marked ${status}`);
+    } catch (error: any) {
+      setOrders(previous);
+      toast.error(error.response?.data?.message || "Could not update order");
+    } finally {
+      setUpdatingOrder(null);
+    }
+  };
+
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    // the upload field is not a native input, so `required` cannot cover it
+    if (!formData.image) {
+      toast.error("Please upload a product image");
+      return;
+    }
     setSubmitting(true);
     try {
       await api.post("/products", {
@@ -104,16 +157,7 @@ const AdminDashboardPage = () => {
       });
       toast.success("Product created");
       setShowForm(false);
-      setFormData({
-        name: "",
-        description: "",
-        price: "",
-        image: "",
-        category: "",
-        isFeatured: false,
-        isOnSale: false,
-        discountPercent: "0",
-      });
+      setFormData(EMPTY_FORM);
       loadData();
     } catch (err: any) {
       toast.error(err.response?.data?.error || "Failed to create product");
@@ -143,13 +187,9 @@ const AdminDashboardPage = () => {
         isFeatured: !product.isFeatured,
       });
       setProducts((prev) =>
-        prev.map((p) =>
-          p._id === product._id ? { ...p, isFeatured: !p.isFeatured } : p
-        )
+        prev.map((p) => (p._id === product._id ? { ...p, isFeatured: !p.isFeatured } : p))
       );
-      toast.success(
-        product.isFeatured ? "Removed from featured" : "Added to featured"
-      );
+      toast.success(product.isFeatured ? "Removed from featured" : "Added to featured");
     } catch {
       toast.error("Failed to update product");
     }
@@ -158,7 +198,17 @@ const AdminDashboardPage = () => {
   const throttledToggleFeatured = useThrottle(handleToggleFeatured, 1000);
 
   if (loading) {
-    return <LoadingSpinner size="lg" className="min-h-[60vh]" />;
+    return (
+      <div className="container-page py-12">
+        <div className="skeleton h-10 w-56" />
+        <div className="mt-10 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="skeleton h-28" />
+          ))}
+        </div>
+        <div className="skeleton mt-8 h-96" />
+      </div>
+    );
   }
 
   const totalSales = analytics?.salesData?.[0]?.totalSales ?? 0;
@@ -166,386 +216,352 @@ const AdminDashboardPage = () => {
   const totalUsers = analytics?.userData?.[0]?.totalUsers ?? 0;
 
   const stats = [
-    {
-      label: "Total Revenue",
-      value: `₦${totalSales.toFixed(2)}`,
-      icon: DollarSign,
-      color: "text-green-500 bg-green-50 dark:bg-green-900/20",
-    },
-    {
-      label: "Total Orders",
-      value: totalOrders,
-      icon: TrendingUp,
-      color: "text-blue-500 bg-blue-50 dark:bg-blue-900/20",
-    },
-    {
-      label: "Total Users",
-      value: totalUsers,
-      icon: Users,
-      color: "text-purple-500 bg-purple-50 dark:bg-purple-900/20",
-    },
-    {
-      label: "Products",
-      value: products.length,
-      icon: Package,
-      color: "text-brand-500 bg-brand-50 dark:bg-brand-900/20",
-    },
+    { label: "Revenue", value: formatPrice(totalSales) },
+    { label: "Orders", value: totalOrders },
+    { label: "Customers", value: totalUsers },
+    { label: "Products", value: products.length },
   ];
 
   return (
     <div className="animate-fade-in">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-        <div className="flex items-center justify-between mb-8">
+      <div className="container-page py-10 sm:py-14">
+        {/* Header */}
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="font-display text-3xl font-semibold text-surface-900 dark:text-surface-50">
+            <p className="eyebrow">Admin</p>
+            <h1 className="mt-3 font-display text-3xl font-extrabold text-surface-900 sm:text-4xl">
               Dashboard
             </h1>
-            <p className="mt-1 text-surface-500 dark:text-surface-400">
-              Manage your store
-            </p>
           </div>
           {activeTab === "products" && (
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-500 text-white text-sm font-medium rounded-xl hover:bg-brand-600 transition-colors"
-            >
-              {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-              {showForm ? "Cancel" : "Add Product"}
+            <button onClick={() => setShowForm(!showForm)} className="btn btn-primary">
+              {showForm ? <X className="w-4 h-4" strokeWidth={1.75} /> : <Plus className="w-4 h-4" strokeWidth={2} />}
+              {showForm ? "Cancel" : "Add product"}
             </button>
           )}
         </div>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-2 mb-8 border-b border-surface-200 dark:border-surface-800">
-          <button
-            onClick={() => setActiveTab("products")}
-            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "products"
-                ? "border-brand-500 text-brand-600 dark:text-brand-400"
-                : "border-transparent text-surface-500 hover:text-surface-700 dark:hover:text-surface-300"
-            }`}
-          >
-            Products
-          </button>
-          <button
-            onClick={() => setActiveTab("orders")}
-            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-              activeTab === "orders"
-                ? "border-brand-500 text-brand-600 dark:text-brand-400"
-                : "border-transparent text-surface-500 hover:text-surface-700 dark:hover:text-surface-300"
-            }`}
-          >
-            Orders
-            <span className="px-2 py-0.5 rounded-full text-xs bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400">
-              {orders.length}
-            </span>
-          </button>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {/* Stats — the numbers are the point, so nothing competes with them */}
+        <div className="mt-9 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border hairline bg-surface-200 lg:grid-cols-4">
           {stats.map((stat) => (
-            <motion.div
-              key={stat.label}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white dark:bg-surface-900 rounded-2xl border border-surface-200/60 dark:border-surface-800/60 p-5"
-            >
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${stat.color}`}>
-                <stat.icon className="w-5 h-5" />
-              </div>
-              <p className="text-2xl font-semibold text-surface-900 dark:text-surface-100">
+            <div key={stat.label} className="bg-white p-5 sm:p-6">
+              <p className="eyebrow">{stat.label}</p>
+              <p className="mt-2.5 font-display text-[1.75rem] font-extrabold tabular-nums leading-none text-surface-900">
                 {stat.value}
               </p>
-              <p className="text-sm text-surface-500 dark:text-surface-400 mt-1">
-                {stat.label}
-              </p>
-            </motion.div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tabs */}
+        <div className="mt-10 flex items-center gap-7 border-b hairline">
+          {(["products", "orders", "shipping"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`relative -mb-px flex items-center gap-2 border-b-2 pb-3 text-sm capitalize transition-colors ${
+                activeTab === tab
+                  ? "border-surface-900 font-medium text-surface-900"
+                  : "border-transparent text-surface-500 hover:text-surface-900"
+              }`}
+            >
+              {tab}
+              {/* Shipping is a settings screen, not a collection — a count would be
+                  meaningless next to it. */}
+              {tab !== "shipping" && (
+                <span className="rounded-full bg-surface-100 px-2 py-0.5 text-xs tabular-nums text-surface-600">
+                  {tab === "products" ? products.length : orders.length}
+                </span>
+              )}
+            </button>
           ))}
         </div>
 
         {activeTab === "products" && (
           <>
-            {/* Add Product Form */}
-            {showForm && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mb-8 bg-white dark:bg-surface-900 rounded-2xl border border-surface-200/60 dark:border-surface-800/60 p-6"
-              >
-                <h2 className="font-medium text-surface-900 dark:text-surface-100 mb-4">
-                  New Product
-                </h2>
-                <form onSubmit={throttledCreate} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <input
-                    type="text"
-                    placeholder="Product name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    required
-                    className="px-4 py-2.5 text-sm bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl text-surface-900 dark:text-surface-100 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
-                  />
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    required
-                    className="px-4 py-2.5 text-sm bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl text-surface-900 dark:text-surface-100 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
-                  >
-                    <option value="" disabled>Select Category</option>
-                    {CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat.toLowerCase()}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    placeholder="Price"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                    required
-                    min="0"
-                    step="0.01"
-                    className="px-4 py-2.5 text-sm bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl text-surface-900 dark:text-surface-100 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Image URL"
-                    value={formData.image}
-                    onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                    required
-                    className="px-4 py-2.5 text-sm bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl text-surface-900 dark:text-surface-100 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
-                  />
-                  <textarea
-                    placeholder="Description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    required
-                    rows={3}
-                    className="sm:col-span-2 px-4 py-2.5 text-sm bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl text-surface-900 dark:text-surface-100 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 resize-none"
-                  />
-                  <div className="sm:col-span-2 flex items-center justify-between">
-                    <label className="flex items-center gap-2 text-sm text-surface-600 dark:text-surface-400 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.isFeatured}
-                        onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
-                        className="rounded border-surface-300 text-brand-500 focus:ring-brand-500"
-                      />
-                      Featured product
-                    </label>
-                    <div className="flex items-center gap-6">
-                      <label className="flex items-center gap-2 text-sm text-surface-600 dark:text-surface-400 cursor-pointer">
+            {/* New product */}
+            <AnimatePresence initial={false}>
+              {showForm && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                  className="overflow-hidden"
+                >
+                  <form onSubmit={throttledCreate} className="card mt-8 p-6 sm:p-8">
+                    <h2 className="font-display text-xl font-extrabold text-surface-900">
+                      New product
+                    </h2>
+
+                    <div className="mt-6 grid grid-cols-2 gap-5">
+                      <div className="col-span-2 sm:col-span-1">
+                        <label htmlFor="p-name" className="label">Product name</label>
+                        <input
+                          id="p-name"
+                          type="text"
+                          placeholder="Organic cotton bodysuit"
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          required
+                          className="field"
+                        />
+                      </div>
+
+                      <div className="col-span-2 sm:col-span-1">
+                        <label htmlFor="p-category" className="label">Category</label>
+                        <select
+                          id="p-category"
+                          value={formData.category}
+                          onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                          required
+                          className="field"
+                        >
+                          <option value="" disabled>Select a category</option>
+                          {CATEGORIES.map((cat) => (
+                            <option key={cat} value={cat.toLowerCase()}>{cat}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="col-span-2 sm:col-span-1">
+                        <label htmlFor="p-price" className="label">Price (₦)</label>
+                        <input
+                          id="p-price"
+                          type="number"
+                          placeholder="18500"
+                          value={formData.price}
+                          onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                          required
+                          min="0"
+                          step="0.01"
+                          className="field"
+                        />
+                      </div>
+
+                      <div className="col-span-2 sm:col-span-1">
+                        <ImageUploadField
+                          value={formData.image}
+                          onUploaded={(url, key) => setFormData({ ...formData, image: url, imageKey: key })}
+                          onCleared={() => setFormData({ ...formData, image: "", imageKey: "" })}
+                        />
+                      </div>
+
+                      <div className="col-span-2">
+                        <label htmlFor="p-desc" className="label">Description</label>
+                        <textarea
+                          id="p-desc"
+                          placeholder="What makes this worth buying?"
+                          value={formData.description}
+                          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                          required
+                          rows={3}
+                          className="field"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-4 border-t hairline pt-6">
+                      <label className="flex cursor-pointer items-center gap-2.5 text-sm text-surface-600">
+                        <input
+                          type="checkbox"
+                          checked={formData.isFeatured}
+                          onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
+                          className="h-4 w-4 rounded border-surface-300 text-brand-600 focus:ring-brand-500/40"
+                        />
+                        Featured
+                      </label>
+
+                      <label className="flex cursor-pointer items-center gap-2.5 text-sm text-surface-600">
                         <input
                           type="checkbox"
                           checked={formData.isOnSale}
                           onChange={(e) => setFormData({ ...formData, isOnSale: e.target.checked })}
-                          className="rounded border-surface-300 text-brand-500 focus:ring-brand-500"
+                          className="h-4 w-4 rounded border-surface-300 text-brand-600 focus:ring-brand-500/40"
                         />
-                        On Sale
+                        On sale
                       </label>
+
                       {formData.isOnSale && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-surface-600 dark:text-surface-400">Discount %</span>
+                        <div className="flex items-center gap-2.5">
+                          <label htmlFor="p-discount" className="text-sm text-surface-600">
+                            Discount %
+                          </label>
                           <input
+                            id="p-discount"
                             type="number"
                             min="0"
                             max="100"
                             value={formData.discountPercent}
                             onChange={(e) => setFormData({ ...formData, discountPercent: e.target.value })}
-                            className="w-20 px-3 py-1.5 text-sm bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg text-surface-900 dark:text-surface-100 focus:outline-none focus:border-brand-500"
+                            className="field h-9 w-20"
                           />
                         </div>
                       )}
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={submitting}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-500 text-white text-sm font-medium rounded-xl hover:bg-brand-600 transition-colors disabled:opacity-50"
-                    >
-                      <Upload className="w-4 h-4" />
-                      {submitting ? "Creating..." : "Create Product"}
-                    </button>
-                  </div>
-                </form>
-              </motion.div>
-            )}
 
-            {/* Products Table */}
-            <div className="bg-white dark:bg-surface-900 rounded-2xl border border-surface-200/60 dark:border-surface-800/60 overflow-hidden">
-              <div className="px-6 py-4 border-b border-surface-200/60 dark:border-surface-800/60">
-                <h2 className="font-medium text-surface-900 dark:text-surface-100">
-                  All Products ({products.length})
-                </h2>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-surface-200/60 dark:border-surface-800/60">
-                      <th className="text-left px-6 py-3 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                        Product
-                      </th>
-                      <th className="text-left px-6 py-3 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                        Category
-                      </th>
-                      <th className="text-left px-6 py-3 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                        Price
-                      </th>
-                      <th className="text-left px-6 py-3 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                        Featured
-                      </th>
-                      <th className="text-left px-6 py-3 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                        Sale
-                      </th>
-                      <th className="text-right px-6 py-3 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-surface-200/60 dark:divide-surface-800/60">
-                    {products.map((product) => (
-                      <tr key={product._id} className="hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <img
-                              src={product.image}
-                              alt={product.name}
-                              className="w-10 h-10 rounded-lg object-cover bg-surface-100 dark:bg-surface-800"
-                            />
-                            <span className="text-sm font-medium text-surface-900 dark:text-surface-100 truncate max-w-[200px]">
-                              {product.name}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-sm text-surface-500 dark:text-surface-400 capitalize">
-                            {product.category}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-sm font-medium text-surface-900 dark:text-surface-100">
-                            ₦{product.price.toFixed(2)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <button
-                            onClick={() => throttledToggleFeatured(product)}
-                            className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
-                              product.isFeatured
-                                ? "bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300"
-                                : "bg-surface-100 dark:bg-surface-800 text-surface-500"
-                            }`}
-                          >
-                            {product.isFeatured ? "Featured" : "Not featured"}
-                          </button>
-                        </td>
-                        <td className="px-6 py-4">
-                          {product.isOnSale ? (
-                            <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
-                              {product.discountPercent}% OFF
-                            </span>
-                          ) : (
-                            <span className="text-xs text-surface-400">No Sale</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <button
-                            onClick={() => throttledDelete(product._id)}
-                            className="p-1.5 rounded-lg text-surface-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
+                      <button type="submit" disabled={submitting} className="btn btn-primary ml-auto min-w-[9rem]">
+                        {submitting ? <LoadingSpinner size="sm" /> : "Create product"}
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Products table */}
+            <div className="card mt-8 overflow-hidden">
+              {products.length === 0 ? (
+                <EmptyState icon={Package} title="No products yet" body="Add your first product to see it here." />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b hairline">
+                        <th className="px-6 py-3.5 text-left"><span className="eyebrow">Product</span></th>
+                        <th className="px-6 py-3.5 text-left"><span className="eyebrow">Category</span></th>
+                        <th className="px-6 py-3.5 text-right"><span className="eyebrow">Price</span></th>
+                        <th className="px-6 py-3.5 text-left"><span className="eyebrow">Featured</span></th>
+                        <th className="px-6 py-3.5 text-left"><span className="eyebrow">Sale</span></th>
+                        <th className="px-6 py-3.5 text-right"><span className="eyebrow sr-only">Actions</span></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y hairline">
+                      {products.map((product) => (
+                        <tr key={product._id} className="transition-colors hover:bg-surface-50">
+                          <td className="px-6 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <img
+                                src={product.image}
+                                alt=""
+                                className="h-10 w-10 shrink-0 rounded-lg bg-surface-100 object-cover"
+                              />
+                              <span className="max-w-[16rem] truncate font-medium text-surface-900">
+                                {product.name}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-3.5 capitalize text-surface-500">
+                            {product.category}
+                          </td>
+                          <td className="px-6 py-3.5 text-right tabular-nums text-surface-900">
+                            {formatPrice(product.price)}
+                          </td>
+                          <td className="px-6 py-3.5">
+                            <button
+                              onClick={() => throttledToggleFeatured(product)}
+                              className={`badge transition-colors ${
+                                product.isFeatured
+                                  ? "bg-brand-100 text-brand-700 hover:bg-brand-200"
+                                  : "bg-surface-100 text-surface-500 hover:bg-surface-200"
+                              }`}
+                            >
+                              {product.isFeatured ? "Featured" : "Not featured"}
+                            </button>
+                          </td>
+                          <td className="px-6 py-3.5">
+                            {product.isOnSale ? (
+                              <span className="badge bg-red-100 text-red-800">
+                                {product.discountPercent}% off
+                              </span>
+                            ) : (
+                              <span className="text-surface-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-3.5 text-right">
+                            <button
+                              onClick={() => throttledDelete(product._id)}
+                              className="grid h-8 w-8 place-items-center rounded-lg text-surface-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                              aria-label={`Delete ${product.name}`}
+                            >
+                              <Trash2 className="w-4 h-4" strokeWidth={1.75} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </>
         )}
 
-        {/* Orders Tab */}
         {activeTab === "orders" && (
-          <div className="bg-white dark:bg-surface-900 rounded-2xl border border-surface-200/60 dark:border-surface-800/60 overflow-hidden">
-            <div className="px-6 py-4 border-b border-surface-200/60 dark:border-surface-800/60">
-              <h2 className="font-medium text-surface-900 dark:text-surface-100">
-                Recent Orders ({orders.length})
-              </h2>
-            </div>
+          <div className="card mt-8 overflow-hidden">
             {orders.length === 0 ? (
-              <div className="p-12 text-center text-surface-500 dark:text-surface-400">
-                <ClipboardList className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>No orders yet.</p>
-              </div>
+              <EmptyState icon={ClipboardList} title="No orders yet" body="Orders will appear here as customers check out." />
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-surface-200/60 dark:border-surface-800/60">
-                      <th className="text-left px-6 py-3 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                        Order ID
-                      </th>
-                      <th className="text-left px-6 py-3 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                        Customer
-                      </th>
-                      <th className="text-left px-6 py-3 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th className="text-left px-6 py-3 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                        Total
-                      </th>
-                      <th className="text-left px-6 py-3 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="text-right px-6 py-3 text-xs font-medium text-surface-500 uppercase tracking-wider">
-                        Items
-                      </th>
+                    <tr className="border-b hairline">
+                      <th className="px-6 py-3.5 text-left"><span className="eyebrow">Order</span></th>
+                      <th className="px-6 py-3.5 text-left"><span className="eyebrow">Customer</span></th>
+                      <th className="px-6 py-3.5 text-left"><span className="eyebrow">Date</span></th>
+                      <th className="px-6 py-3.5 text-right"><span className="eyebrow">Total</span></th>
+                      <th className="px-6 py-3.5 text-left"><span className="eyebrow">Payment</span></th>
+                      <th className="px-6 py-3.5 text-right"><span className="eyebrow">Items</span></th>
+                      <th className="px-6 py-3.5 text-left"><span className="eyebrow">Fulfilment</span></th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-surface-200/60 dark:divide-surface-800/60">
+                  <tbody className="divide-y hairline">
                     {orders.map((order) => (
-                      <tr key={order._id} className="hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors">
-                        <td className="px-6 py-4">
-                          <span className="text-sm font-medium text-surface-900 dark:text-surface-100 font-mono">
-                            {order._id.substring(order._id.length - 8)}
-                          </span>
+                      <tr key={order._id} className="transition-colors hover:bg-surface-50">
+                        <td className="px-6 py-3.5 font-mono text-xs text-surface-500">
+                          {order._id.slice(-8)}
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium text-surface-900 dark:text-surface-100">
-                              {order.user?.name || "Unknown User"}
+                        <td className="px-6 py-3.5">
+                          <span className="block font-medium text-surface-900">
+                            {order.user?.name || order.guest?.name || "Unknown user"}
+                          </span>
+                          <span className="block text-xs text-surface-500">
+                            {order.user?.email || order.guest?.email || "No email"}
+                          </span>
+                          {/* Worth flagging: there is no account behind this one, so
+                              the address on the order is the only record of them. */}
+                          {!order.user && order.guest && (
+                            <span className="mt-1 inline-block rounded bg-surface-100 px-1.5 py-0.5 text-[0.6875rem] font-medium text-surface-500">
+                              Guest
                             </span>
-                            <span className="text-xs text-surface-500">
-                              {order.user?.email || "No Email"}
+                          )}
+                        </td>
+                        <td className="px-6 py-3.5 whitespace-nowrap text-surface-500">
+                          {formatDate(order.createdAt)}
+                        </td>
+                        <td className="px-6 py-3.5 text-right tabular-nums font-medium text-surface-900">
+                          {formatPrice(order.totalAmount)}
+                        </td>
+                        <td className="px-6 py-3.5 whitespace-nowrap">
+                          <span className={`badge capitalize ${PAYMENT_STYLES[order.paymentStatus] ?? "bg-surface-100 text-surface-600"}`}>
+                            {order.paymentStatus}
+                          </span>
+                          <span className="mt-1 block text-xs text-surface-500">
+                            {PROVIDER_LABELS[order.paymentProvider] ?? order.paymentProvider}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3.5 text-right tabular-nums text-surface-500">
+                          {order.items.reduce((sum, item) => sum + item.quantity, 0)}
+                        </td>
+                        <td className="px-6 py-3.5">
+                          {order.paymentStatus === "paid" ? (
+                            <select
+                              value={order.status}
+                              onChange={(e) => handleUpdateOrderStatus(order._id, e.target.value)}
+                              disabled={updatingOrder === order._id}
+                              aria-label={`Fulfilment status for order ${order._id.slice(-8)}`}
+                              className="field !py-1.5 !text-xs capitalize disabled:opacity-50"
+                            >
+                              {FULFILMENT_OPTIONS.map((option) => (
+                                <option key={option} value={option} className="capitalize">
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className={`badge capitalize ${STATUS_STYLES[order.status] ?? "bg-surface-100 text-surface-600"}`}>
+                              {order.status.replace(/_/g, " ")}
                             </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-sm text-surface-500 dark:text-surface-400">
-                            {new Date(order.createdAt).toLocaleDateString()}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-sm font-medium text-surface-900 dark:text-surface-100">
-                            ₦{order.totalAmount.toFixed(2)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2.5 py-1 text-xs font-medium rounded-full capitalize ${
-                            order.status === "pending" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300" :
-                            order.status === "shipped" ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300" :
-                            order.status === "delivered" ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300" :
-                            "bg-surface-100 text-surface-800"
-                          }`}>
-                            {order.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <span className="text-sm text-surface-500 dark:text-surface-400">
-                            {order.items.reduce((sum, item) => sum + item.quantity, 0)} items
-                          </span>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -556,9 +572,28 @@ const AdminDashboardPage = () => {
           </div>
         )}
 
+        {activeTab === "shipping" && <ShippingZonesPanel />}
       </div>
     </div>
   );
 };
+
+const EmptyState = ({
+  icon: Icon,
+  title,
+  body,
+}: {
+  icon: typeof Package;
+  title: string;
+  body: string;
+}) => (
+  <div className="grid place-items-center px-6 py-20 text-center">
+    <div className="grid h-12 w-12 place-items-center rounded-2xl bg-surface-100">
+      <Icon className="w-5 h-5 text-surface-400" strokeWidth={1.5} />
+    </div>
+    <p className="mt-4 font-medium text-surface-900">{title}</p>
+    <p className="mt-1 text-sm text-surface-500">{body}</p>
+  </div>
+);
 
 export default AdminDashboardPage;

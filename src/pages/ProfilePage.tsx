@@ -1,10 +1,25 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { User, Phone, MapPin, Building, Map as MapIcon, Hash, Save, Mail } from "lucide-react";
+import { User, Phone, MapPin, Building, Map as MapIcon, Hash, Mail } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { toast } from "sonner";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { NIGERIAN_STATES, canonicalState } from "@/lib/nigeria";
 import { useThrottle } from "@/hooks/useThrottle";
+
+const PERSONAL_FIELDS = [
+  { key: "name", label: "Full name", icon: User, type: "text", placeholder: "Ada Nwosu", disabled: false },
+  { key: "email", label: "Email address", icon: Mail, type: "email", placeholder: "", disabled: true },
+  { key: "phoneNumber", label: "Phone number", icon: Phone, type: "tel", placeholder: "+234 801 234 5678", disabled: false },
+] as const;
+
+const ADDRESS_FIELDS = [
+  { key: "address", label: "Street address", icon: MapPin, type: "text", placeholder: "12 Bourdillon Road", span: true },
+  { key: "city", label: "City", icon: Building, type: "text", placeholder: "Ikeja", span: false },
+  { key: "state", label: "State", icon: MapIcon, type: "text", placeholder: "Lagos", span: false, control: "select" },
+  { key: "zipCode", label: "Postal code", icon: Hash, type: "text", placeholder: "101233", span: false },
+] as const;
 
 const ProfilePage = () => {
   const { user, updateProfile, isLoading } = useAuthStore();
@@ -26,7 +41,7 @@ const ProfilePage = () => {
         phoneNumber: user.phoneNumber || "",
         address: user.address || "",
         city: user.city || "",
-        state: user.state || "",
+        state: canonicalState(user.state),
         zipCode: user.zipCode || "",
       });
     }
@@ -46,132 +61,106 @@ const ProfilePage = () => {
 
   if (!user) return null;
 
+  const setField = (key: string, value: string) => setFormData({ ...formData, [key]: value });
+
   return (
-    <div className="animate-fade-in min-h-[80vh] py-12 px-4 sm:px-6 lg:px-8 bg-surface-50 dark:bg-surface-950">
-      <div className="max-w-3xl mx-auto">
-        <div className="mb-8">
-          <h1 className="font-display text-3xl font-semibold text-surface-900 dark:text-surface-50">Account Settings</h1>
-          <p className="mt-2 text-surface-500 dark:text-surface-400">Manage your profile and shipping information</p>
+    <div className="animate-fade-in">
+      <div className="container-page max-w-3xl py-12 sm:py-16">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="eyebrow">Account</p>
+            <h1 className="mt-3 font-display text-3xl font-extrabold text-surface-900 sm:text-4xl">
+              Settings
+            </h1>
+            <p className="mt-2 text-surface-500">
+              Your details and where we should send your orders.
+            </p>
+          </div>
+          {/* This page is only the address form; order history lives on its own page. */}
+          <Link to="/orders" className="btn btn-secondary btn-sm">
+            My orders
+          </Link>
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
+        <motion.form
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white dark:bg-surface-900 rounded-3xl border border-surface-200/60 dark:border-surface-800/60 shadow-sm overflow-hidden"
+          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          onSubmit={throttledSubmit}
+          className="mt-10"
         >
-          <form onSubmit={throttledSubmit} className="p-8 space-y-8">
-            {/* Personal Info Section */}
-            <div>
-              <h2 className="text-sm font-semibold text-brand-600 dark:text-brand-400 uppercase tracking-wider mb-6">Personal Information</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-2">Full Name</label>
+          <section>
+            <h2 className="eyebrow">Personal information</h2>
+            <div className="mt-5 grid grid-cols-2 gap-5">
+              {PERSONAL_FIELDS.map((field) => (
+                <div key={field.key} className="col-span-2 sm:col-span-1">
+                  <label htmlFor={field.key} className="label">{field.label}</label>
                   <div className="relative">
-                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
+                    <field.icon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" strokeWidth={1.75} />
                     <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full pl-10 pr-4 py-2.5 bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl text-surface-900 dark:text-surface-100 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all outline-none"
+                      id={field.key}
+                      type={field.type}
+                      value={formData[field.key]}
+                      disabled={field.disabled}
+                      placeholder={field.placeholder}
+                      onChange={(e) => setField(field.key, e.target.value)}
+                      className="field field-icon"
                     />
                   </div>
+                  {field.disabled && (
+                    <p className="mt-1.5 text-xs text-surface-400">
+                      Contact support to change your email
+                    </p>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-2">Email Address</label>
-                  <div className="relative">
-                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
-                    <input
-                      type="email"
-                      value={formData.email}
-                      disabled
-                      className="w-full pl-10 pr-4 py-2.5 bg-surface-100 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-xl text-surface-500 dark:text-surface-500 cursor-not-allowed outline-none"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-2">Phone Number</label>
-                  <div className="relative">
-                    <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
-                    <input
-                      type="tel"
-                      value={formData.phoneNumber}
-                      onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                      placeholder="+234..."
-                      className="w-full pl-10 pr-4 py-2.5 bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl text-surface-900 dark:text-surface-100 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
+          </section>
 
-            {/* Shipping Info Section */}
-            <div className="pt-8 border-t border-surface-100 dark:border-surface-800">
-              <h2 className="text-sm font-semibold text-brand-600 dark:text-brand-400 uppercase tracking-wider mb-6">Shipping Address</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-2">Street Address</label>
+          <section className="mt-10 border-t hairline pt-10">
+            <h2 className="eyebrow">Shipping address</h2>
+            <div className="mt-5 grid grid-cols-2 gap-5">
+              {ADDRESS_FIELDS.map((field) => (
+                <div key={field.key} className={field.span ? "col-span-2" : "col-span-2 sm:col-span-1"}>
+                  <label htmlFor={field.key} className="label">{field.label}</label>
                   <div className="relative">
-                    <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
-                    <input
-                      type="text"
-                      value={formData.address}
-                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                      placeholder="e.g. 123 Luxury Lane"
-                      className="w-full pl-10 pr-4 py-2.5 bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl text-surface-900 dark:text-surface-100 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all outline-none"
-                    />
+                    <field.icon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" strokeWidth={1.75} />
+                    {"control" in field && field.control === "select" ? (
+                      <select
+                        id={field.key}
+                        value={formData[field.key]}
+                        onChange={(e) => setField(field.key, e.target.value)}
+                        className="field field-icon"
+                      >
+                        <option value="">Choose a state</option>
+                        {NIGERIAN_STATES.map((state) => (
+                          <option key={state} value={state}>
+                            {state}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        id={field.key}
+                        type={field.type}
+                        value={formData[field.key]}
+                        placeholder={field.placeholder}
+                        onChange={(e) => setField(field.key, e.target.value)}
+                        className="field field-icon"
+                      />
+                    )}
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-2">City</label>
-                  <div className="relative">
-                    <Building className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
-                    <input
-                      type="text"
-                      value={formData.city}
-                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                      className="w-full pl-10 pr-4 py-2.5 bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl text-surface-900 dark:text-surface-100 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all outline-none"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-2">State / Province</label>
-                  <div className="relative">
-                    <MapIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
-                    <input
-                      type="text"
-                      value={formData.state}
-                      onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                      className="w-full pl-10 pr-4 py-2.5 bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl text-surface-900 dark:text-surface-100 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all outline-none"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-2">Zip / Postal Code</label>
-                  <div className="relative">
-                    <Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
-                    <input
-                      type="text"
-                      value={formData.zipCode}
-                      onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
-                      className="w-full pl-10 pr-4 py-2.5 bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl text-surface-900 dark:text-surface-100 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
+          </section>
 
-            <div className="pt-8 flex justify-end">
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="inline-flex items-center gap-2 px-8 py-3 bg-brand-500 hover:bg-brand-600 text-white font-medium rounded-xl transition-all shadow-md shadow-brand-500/20 disabled:opacity-50"
-              >
-                {isLoading ? <LoadingSpinner size="sm" /> : <Save className="w-4 h-4" />}
-                Save Changes
-              </button>
-            </div>
-          </form>
-        </motion.div>
+          <div className="mt-10 flex justify-end border-t hairline pt-8">
+            <button type="submit" disabled={isLoading} className="btn btn-primary min-w-[10rem]">
+              {isLoading ? <LoadingSpinner size="sm" /> : "Save changes"}
+            </button>
+          </div>
+        </motion.form>
       </div>
     </div>
   );

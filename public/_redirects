@@ -1,0 +1,4 @@
+# Netlify SPA fallback. Client-side routes such as /products/:id and the
+# /purchase-success URL that Paystack and OPay redirect back to do not exist as
+# files, so every path must be served index.html and resolved by the router.
+/*  /index.html  200

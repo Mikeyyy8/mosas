@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, ShoppingBag, Check } from "lucide-react";
+import { ArrowLeft, Check, ImageOff, ShieldCheck, Truck, RotateCcw } from "lucide-react";
 import api from "@/lib/axios";
-import { useAuthStore } from "@/stores/useAuthStore";
 import { useCartStore } from "@/stores/useCartStore";
+import { formatPrice } from "@/lib/format";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { toast } from "sonner";
 
@@ -20,14 +20,20 @@ interface Product {
   isFeatured?: boolean;
 }
 
+const ASSURANCES = [
+  { icon: Truck, text: "Free delivery on orders over ₦50,000" },
+  { icon: RotateCcw, text: "30-day returns, no questions asked" },
+  { icon: ShieldCheck, text: "Safety tested and certified" },
+];
+
 const ProductDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [added, setAdded] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
 
-  const user = useAuthStore((s) => s.user);
   const addToCart = useCartStore((s) => s.addToCart);
 
   useEffect(() => {
@@ -44,11 +50,10 @@ const ProductDetailPage = () => {
     fetchProduct();
   }, [id]);
 
+  // No sign-in check. A guest's cart lives in their browser and the store handles
+  // that transparently, exactly as the quick-add button on the product grid does —
+  // this page was the last place still turning guests away.
   const handleAddToCart = async () => {
-    if (!user) {
-      toast.error("Please sign in to add items to cart");
-      return;
-    }
     if (!product) return;
     setIsAdding(true);
     try {
@@ -64,18 +69,31 @@ const ProductDetailPage = () => {
   };
 
   if (loading) {
-    return <LoadingSpinner size="lg" className="min-h-[60vh]" />;
+    return (
+      <div className="container-page py-12">
+        <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
+          <div className="skeleton aspect-square rounded-3xl" />
+          <div className="flex flex-col justify-center gap-4">
+            <div className="skeleton h-3 w-20" />
+            <div className="skeleton h-9 w-3/4" />
+            <div className="skeleton h-6 w-28" />
+            <div className="skeleton mt-4 h-20 w-full" />
+            <div className="skeleton mt-2 h-12 w-48" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!product) {
     return (
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-20 text-center">
-        <p className="text-surface-500 text-lg">Product not found</p>
-        <Link
-          to="/products"
-          className="inline-flex items-center gap-2 mt-4 text-brand-600 hover:text-brand-700 text-sm font-medium"
-        >
-          <ArrowLeft className="w-4 h-4" />
+      <div className="container-page grid place-items-center py-28 text-center">
+        <p className="font-display text-2xl text-surface-900">Product not found</p>
+        <p className="mt-2 text-sm text-surface-500">
+          It may have been removed from the collection.
+        </p>
+        <Link to="/products" className="btn btn-secondary mt-6">
+          <ArrowLeft className="w-4 h-4" strokeWidth={1.75} />
           Back to products
         </Link>
       </div>
@@ -89,91 +107,95 @@ const ProductDetailPage = () => {
 
   return (
     <div className="animate-fade-in">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-        {/* Back link */}
+      <div className="container-page py-8 sm:py-12">
         <Link
           to="/products"
-          className="inline-flex items-center gap-2 text-sm text-surface-500 hover:text-surface-900 dark:hover:text-surface-100 transition-colors mb-8"
+          className="mb-8 inline-flex items-center gap-2 rounded text-sm text-surface-500 transition-colors hover:text-surface-900"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4" strokeWidth={1.75} />
           Back to products
         </Link>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16">
+        <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
           {/* Image */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
+            initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
-            className="aspect-square rounded-2xl overflow-hidden bg-surface-100 dark:bg-surface-800"
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            className="relative aspect-square overflow-hidden rounded-3xl bg-surface-100"
           >
-            <img
-              src={product.image}
-              alt={product.name}
-              className="w-full h-full object-cover"
-            />
+            {imageFailed ? (
+              <div className="grid h-full place-items-center text-surface-300">
+                <ImageOff className="w-9 h-9" strokeWidth={1.5} />
+              </div>
+            ) : (
+              <img
+                src={product.image}
+                alt={product.name}
+                onError={() => setImageFailed(true)}
+                className="h-full w-full object-cover"
+              />
+            )}
+            {product.isOnSale && product.discountPercent && (
+              <span className="badge-sale absolute left-4 top-4">
+                {product.discountPercent}% off
+              </span>
+            )}
           </motion.div>
 
           {/* Info */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1, duration: 0.5 }}
-            className="flex flex-col justify-center"
+            transition={{ delay: 0.08, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            className="flex flex-col justify-center lg:py-4"
           >
-            <p className="text-sm font-medium text-brand-500 uppercase tracking-wider mb-3">
-              {product.category}
-            </p>
+            <p className="eyebrow">{product.category}</p>
 
-            <h1 className="font-display text-3xl sm:text-4xl font-semibold text-surface-900 dark:text-surface-50 tracking-tight">
+            <h1 className="mt-3 font-display text-[2rem] font-extrabold leading-tight text-surface-900 sm:text-[2.5rem]">
               {product.name}
             </h1>
 
-            <div className="flex items-baseline gap-3 mt-4">
-              <span className="text-2xl font-semibold text-surface-900 dark:text-surface-100">
-                ₦{(salePrice ?? product.price).toFixed(2)}
+            <div className="mt-5 flex items-baseline gap-3">
+              <span className="tabular text-2xl font-semibold text-surface-900">
+                {formatPrice(salePrice ?? product.price)}
               </span>
               {salePrice && (
-                <span className="text-lg text-surface-400 line-through">
-                  ₦{product.price.toFixed(2)}
-                </span>
-              )}
-              {product.isOnSale && product.discountPercent && (
-                <span className="px-2.5 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm font-medium rounded-full">
-                  -{product.discountPercent}% off
-                </span>
+                <span className="tabular text-lg text-surface-500 line-through">{formatPrice(product.price)}</span>
               )}
             </div>
 
-            <div className="w-12 h-px bg-surface-200 dark:bg-surface-800 my-6" />
-
-            <p className="text-surface-600 dark:text-surface-400 leading-relaxed">
+            <p className="mt-7 leading-relaxed text-surface-600 text-pretty">
               {product.description}
             </p>
 
             <button
               onClick={handleAddToCart}
               disabled={added || isAdding}
-              className={`mt-8 inline-flex items-center justify-center gap-2 px-6 py-3.5 text-sm font-medium rounded-xl transition-all duration-200 ${
-                added
-                  ? "bg-green-500 text-white"
-                  : "bg-surface-900 dark:bg-surface-100 text-white dark:text-surface-900 hover:bg-surface-800 dark:hover:bg-surface-200"
-              } disabled:opacity-50`}
+              className={`btn btn-lg mt-9 w-full sm:w-auto sm:min-w-[15rem] ${
+                added ? "bg-brand-500 text-white hover:bg-brand-500" : "btn-primary"
+              }`}
             >
               {isAdding ? (
                 <LoadingSpinner size="sm" />
               ) : added ? (
                 <>
-                  <Check className="w-4 h-4" />
-                  Added to Cart
+                  <Check className="w-4 h-4" strokeWidth={2} />
+                  Added to cart
                 </>
               ) : (
-                <>
-                  <ShoppingBag className="w-4 h-4" />
-                  Add to Cart
-                </>
+                "Add to cart"
               )}
             </button>
+
+            <ul className="mt-10 space-y-3 border-t hairline pt-8">
+              {ASSURANCES.map((item) => (
+                <li key={item.text} className="flex items-center gap-3 text-sm text-surface-500">
+                  <item.icon className="w-4 h-4 shrink-0 text-brand-600" strokeWidth={1.75} />
+                  {item.text}
+                </li>
+              ))}
+            </ul>
           </motion.div>
         </div>
       </div>

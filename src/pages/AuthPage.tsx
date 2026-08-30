@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useNavigate, Navigate } from "react-router-dom";
+import { useNavigate, Navigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Mail, Lock, User, Eye, EyeOff, Package } from "lucide-react";
+import { Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import BrandMark from "@/components/BrandMark";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { toast } from "sonner";
 import { useThrottle } from "@/hooks/useThrottle";
@@ -37,130 +38,133 @@ const AuthPage = () => {
     return <Navigate to="/" replace />;
   }
 
-
   return (
-    <div className="animate-fade-in min-h-[80vh] flex items-center justify-center px-4 py-12">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md"
-      >
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <Package className="w-7 h-7 text-brand-500" />
-          <span className="font-display text-2xl font-semibold text-surface-900 dark:text-surface-50">
-            MOSAS
-          </span>
-        </div>
+    <div className="grid min-h-[calc(100vh-68px)] lg:grid-cols-2">
+      {/* Form */}
+      <div className="flex items-center justify-center px-5 py-14 sm:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          className="w-full max-w-[26rem]"
+        >
+          <Link to="/" className="mb-10 inline-flex items-center gap-2.5 lg:hidden">
+            <BrandMark className="w-[22px] h-[22px] text-brand-600" />
+            <span className="font-display text-xl font-extrabold text-surface-900">MOSAS</span>
+          </Link>
 
-        {/* Card */}
-        <div className="bg-white dark:bg-surface-900 rounded-2xl border border-surface-200/60 dark:border-surface-800/60 shadow-elevated p-8">
-          <h1 className="text-xl font-semibold text-surface-900 dark:text-surface-100 text-center mb-1">
-            {isLogin ? "Welcome back" : "Create an account"}
+          <h1 className="font-display text-[2rem] font-extrabold leading-tight text-surface-900">
+            {isLogin ? "Welcome back" : "Create your account"}
           </h1>
-          <p className="text-sm text-surface-500 dark:text-surface-400 text-center mb-8">
-            {isLogin
-              ? "Sign in to continue shopping"
-              : "Join MOSAS to start shopping"}
+          <p className="mt-2 text-surface-500">
+            {isLogin ? "Sign in to pick up where you left off." : "A few details and you're shopping."}
           </p>
 
-          <form onSubmit={throttledSubmit} className="space-y-4">
+          <form onSubmit={throttledSubmit} className="mt-9 space-y-5">
             {!isLogin && (
               <div>
-                <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">
-                  Full Name
-                </label>
+                <label htmlFor="name" className="label">Full name</label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
+                  <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" strokeWidth={1.75} />
                   <input
+                    id="name"
                     type="text"
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="John Doe"
+                    placeholder="Ada Nwosu"
                     required={!isLogin}
-                    className="w-full pl-10 pr-4 py-2.5 text-sm bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl text-surface-900 dark:text-surface-100 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+                    className="field field-icon"
                   />
                 </div>
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">
-                Email Address
-              </label>
+              <label htmlFor="email" className="label">Email address</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
+                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" strokeWidth={1.75} />
                 <input
+                  id="email"
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   placeholder="you@example.com"
                   required
-                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl text-surface-900 dark:text-surface-100 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+                  autoComplete="email"
+                  className="field field-icon"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">
-                Password
-              </label>
+              <label htmlFor="password" className="label">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
+                <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" strokeWidth={1.75} />
                 <input
+                  id="password"
                   type={showPassword ? "text" : "password"}
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder="••••••••"
+                  placeholder="At least 8 characters"
                   required
-                  minLength={6}
-                  className="w-full pl-10 pr-10 py-2.5 text-sm bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl text-surface-900 dark:text-surface-100 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+                  minLength={8}
+                  autoComplete={isLogin ? "current-password" : "new-password"}
+                  className="field field-icon pr-11"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-600 transition-colors"
+                  className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-surface-400 transition-colors hover:text-surface-700"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
+                  {showPassword ? <EyeOff className="w-4 h-4" strokeWidth={1.75} /> : <Eye className="w-4 h-4" strokeWidth={1.75} />}
                 </button>
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full h-11 flex items-center justify-center bg-surface-900 dark:bg-surface-100 text-white dark:text-surface-900 text-sm font-medium rounded-xl hover:bg-surface-800 dark:hover:bg-surface-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <LoadingSpinner size="sm" />
-              ) : isLogin ? (
-                "Sign In"
-              ) : (
-                "Create Account"
-              )}
+            <button type="submit" disabled={isLoading} className="btn btn-primary w-full">
+              {isLoading ? <LoadingSpinner size="sm" /> : isLogin ? "Sign in" : "Create account"}
             </button>
           </form>
 
-          <div className="mt-6 text-center">
+          <p className="mt-8 text-center text-sm text-surface-500">
+            {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
             <button
               onClick={() => {
                 setIsLogin(!isLogin);
                 setForm({ name: "", email: "", password: "" });
               }}
-              className="text-sm text-surface-500 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
+              className="rounded font-medium text-surface-900 underline underline-offset-4 transition-colors hover:text-brand-700"
             >
-              {isLogin
-                ? "Don't have an account? Sign up"
-                : "Already have an account? Sign in"}
+              {isLogin ? "Sign up" : "Sign in"}
             </button>
+          </p>
+        </motion.div>
+      </div>
+
+      {/* Brand panel */}
+      <div className="relative hidden overflow-hidden bg-surface-900 lg:block">
+        <img
+          src="https://images.unsplash.com/photo-1616627561950-9f746e330187?w=1400&q=80"
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover opacity-45"
+        />
+        <div className="absolute inset-0 bg-gradient-to-tr from-surface-950 via-surface-950/70 to-transparent" />
+        <div className="relative flex h-full flex-col justify-between p-12">
+          <Link to="/" className="inline-flex items-center gap-2.5 self-start">
+            <BrandMark className="w-[26px] h-[26px] text-brand-300" />
+            <span className="font-display text-[1.375rem] font-extrabold text-surface-50">MOSAS</span>
+          </Link>
+
+          <div className="max-w-md">
+            <p className="font-display text-[2rem] font-medium leading-snug text-surface-50 text-balance">
+              Everything for the first thousand days — chosen with the care you'd give it yourself.
+            </p>
+            <p className="mt-6 text-sm text-surface-400">Trusted by over 2,000 families across Nigeria</p>
           </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };

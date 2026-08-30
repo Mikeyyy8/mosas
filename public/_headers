@@ -1,0 +1,18 @@
+# Netlify security headers. The Vercel equivalent lives in vercel.json — keep the
+# two in step. Content-Security-Policy is deliberately absent from both: it is
+# emitted as a <meta> tag by the build (see vite.config.ts) because one of its
+# directives depends on VITE_API_URL, which a static config file cannot read.
+# frame-ancestors is the one directive a meta tag cannot carry, so X-Frame-Options
+# covers that here.
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  Cross-Origin-Opener-Policy: same-origin
+
+# Hashed filenames, so these can be cached indefinitely.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

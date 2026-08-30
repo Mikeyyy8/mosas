@@ -1,8 +1,8 @@
 import { motion } from "framer-motion";
-import { ShoppingBag } from "lucide-react";
+import { Plus, ImageOff } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useAuthStore } from "@/stores/useAuthStore";
 import { useCartStore } from "@/stores/useCartStore";
+import { formatPrice } from "@/lib/format";
 import { toast } from "sonner";
 import { useState } from "react";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -21,12 +21,18 @@ interface Product {
 
 interface ProductCardProps {
   product: Product;
+  /**
+   * Off inside a grid that is already all featured products — repeating the word
+   * on every card in a section headed "Featured products" tells the reader
+   * nothing, and it crowds out the markdown badge, which does.
+   */
+  showFeaturedBadge?: boolean;
 }
 
-const ProductCard = ({ product }: ProductCardProps) => {
-  const user = useAuthStore((s) => s.user);
+const ProductCard = ({ product, showFeaturedBadge = true }: ProductCardProps) => {
   const addToCart = useCartStore((s) => s.addToCart);
   const [isAdding, setIsAdding] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
 
   const salePrice =
     product.isOnSale && product.discountPercent
@@ -36,10 +42,6 @@ const ProductCard = ({ product }: ProductCardProps) => {
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!user) {
-      toast.error("Please sign in to add items to cart");
-      return;
-    }
     setIsAdding(true);
     try {
       await addToCart(product._id);
@@ -53,61 +55,66 @@ const ProductCard = ({ product }: ProductCardProps) => {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
     >
-      <Link
-        to={`/products/${product._id}`}
-        className="group block bg-white dark:bg-surface-900 rounded-2xl overflow-hidden border border-surface-200/60 dark:border-surface-800/60 shadow-soft hover:shadow-elevated transition-all duration-300"
-      >
+      <Link to={`/products/${product._id}`} className="group block">
         {/* Image */}
-        <div className="relative aspect-square overflow-hidden bg-surface-100 dark:bg-surface-800">
-          <img
-            src={product.image}
-            alt={product.name}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-            loading="lazy"
-          />
-          {product.isOnSale && product.discountPercent && (
-            <span className="absolute top-3 left-3 px-2.5 py-1 bg-red-500 text-white text-xs font-semibold rounded-full">
-              -{product.discountPercent}%
-            </span>
+        <div className="relative aspect-[4/5] overflow-hidden rounded-3xl bg-surface-100">
+          {imageFailed ? (
+            <div className="absolute inset-0 grid place-items-center text-surface-300">
+              <ImageOff className="w-7 h-7" strokeWidth={1.5} />
+            </div>
+          ) : (
+            <img
+              src={product.image}
+              alt={product.name}
+              onError={() => setImageFailed(true)}
+              className="h-full w-full object-cover transition-transform duration-700 ease-smooth group-hover:scale-[1.04]"
+              loading="lazy"
+            />
           )}
-          {product.isFeatured && (
-            <span className="absolute top-3 right-3 px-2.5 py-1 bg-brand-500 text-white text-xs font-semibold rounded-full">
-              Featured
-            </span>
-          )}
+
+          <div className="absolute inset-x-3 top-3 flex items-start justify-between gap-2">
+            {product.isOnSale && product.discountPercent ? (
+              <span className="badge-sale">{product.discountPercent}% off</span>
+            ) : (
+              <span />
+            )}
+            {showFeaturedBadge && product.isFeatured && (
+              <span className="badge bg-white/90 text-surface-700 backdrop-blur-sm">
+                Featured
+              </span>
+            )}
+          </div>
+
+          {/* Quick add — always reachable on touch, revealed on pointer hover */}
+          <button
+            onClick={handleAddToCart}
+            disabled={isAdding}
+            className="absolute bottom-3 right-3 grid h-10 w-10 place-items-center rounded-full bg-white text-surface-900 shadow-elevated transition-all duration-300 ease-smooth hover:bg-surface-900 hover:text-white disabled:opacity-60 md:translate-y-2 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100"
+            aria-label={`Add ${product.name} to cart`}
+          >
+            {isAdding ? <LoadingSpinner size="sm" /> : <Plus className="w-[18px] h-[18px]" strokeWidth={2} />}
+          </button>
         </div>
 
         {/* Info */}
-        <div className="p-4">
-          <p className="text-xs font-medium text-surface-400 dark:text-surface-500 uppercase tracking-wider mb-1">
-            {product.category}
-          </p>
-          <h3 className="font-medium text-surface-900 dark:text-surface-100 mb-2 line-clamp-1">
+        <div className="pt-3.5">
+          <p className="eyebrow">{product.category}</p>
+          <h3 className="mt-1.5 line-clamp-1 text-[0.9375rem] font-medium text-surface-900 transition-colors group-hover:text-brand-700">
             {product.name}
           </h3>
-          <div className="flex items-center justify-between">
-            <div className="flex items-baseline gap-2">
-              <span className="text-lg font-semibold text-surface-900 dark:text-surface-100">
-                ₦{(salePrice ?? product.price).toFixed(2)}
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="tabular text-[0.9375rem] font-semibold text-surface-900">
+              {formatPrice(salePrice ?? product.price)}
+            </span>
+            {salePrice && (
+              <span className="tabular text-[0.8125rem] text-surface-500 line-through">
+                {formatPrice(product.price)}
               </span>
-              {salePrice && (
-                <span className="text-sm text-surface-400 line-through">
-                  ₦{product.price.toFixed(2)}
-                </span>
-              )}
-            </div>
-            <button
-              onClick={handleAddToCart}
-              disabled={isAdding}
-              className="p-2 rounded-xl bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-brand-500 hover:text-white transition-all duration-200 disabled:opacity-50"
-              aria-label={`Add ${product.name} to cart`}
-            >
-              {isAdding ? <LoadingSpinner size="sm" /> : <ShoppingBag className="w-4 h-4" />}
-            </button>
+            )}
           </div>
         </div>
       </Link>

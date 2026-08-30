@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, Heart, Shield, Truck } from "lucide-react";
 import ProductCard from "@/components/ProductCard";
-import LoadingSpinner from "@/components/LoadingSpinner";
 import api from "@/lib/axios";
 
 interface Product {
@@ -21,49 +20,72 @@ interface Product {
 const HERO_SLIDES = [
   {
     category: "Clothes",
-    title: "Gentle Essentials",
-    subtitle: "Curated for your little one",
-    description: "Premium baby clothes designed for ultimate comfort and style. Safe, soft, and sustainable.",
-    image: "https://images.unsplash.com/photo-1519689680058-324335c77eba?w=1200&q=80",
-    color: "bg-brand-50"
+    title: "Gentle essentials",
+    subtitle: "for your little one",
+    description: "Organic cotton, flat seams, and nothing that itches. Made to be worn every day and washed just as often.",
+    image: "https://images.unsplash.com/photo-1622290319146-7b63df48a635?w=1200&q=80",
   },
   {
     category: "Gear",
-    title: "Safe Adventures",
-    subtitle: "Quality gear for every journey",
-    description: "From strollers to car seats, we provide the best gear to keep your baby safe on the go.",
-    image: "https://images.unsplash.com/photo-1491013516836-7dbf43681043?w=1200&q=80",
-    color: "bg-blue-50"
+    title: "Safe adventures",
+    subtitle: "from the first step on",
+    description: "Strollers, carriers, and car seats chosen for how they handle real pavements — not showroom floors.",
+    image: "https://images.unsplash.com/photo-1773672268537-21e349bc7273?w=1200&q=80",
   },
   {
     category: "Nursery",
-    title: "Dreamy Spaces",
-    subtitle: "Beautiful nursery designs",
-    description: "Create a peaceful sanctuary for your baby with our carefully selected nursery furniture.",
-    image: "https://images.unsplash.com/photo-1555022839-843343cb43a6?w=1200&q=80",
-    color: "bg-green-50"
+    title: "Dreamy spaces",
+    subtitle: "built to be slept in",
+    description: "Solid wood, non-toxic finishes, and blackout layers. A room that quiets down when you need it to.",
+    image: "https://images.unsplash.com/photo-1749703827003-8e5046941847?w=1200&q=80",
   },
   {
     category: "Toys",
-    title: "Playful Learning",
-    subtitle: "Toys that inspire wonder",
-    description: "Educational and fun toys that support your child's growth and imagination.",
-    image: "https://images.unsplash.com/photo-1555985202-12975b0235dc?w=1200&q=80",
-    color: "bg-yellow-50"
-  }
+    title: "Playful learning",
+    subtitle: "with room to imagine",
+    description: "Open-ended toys in beechwood and cotton, sized for small hands and built to survive them.",
+    image: "https://images.unsplash.com/photo-1637728226029-e590a9a16c4b?w=1200&q=80",
+  },
+];
+
+// One tile per category the catalogue actually stocks — the grid is 2 columns on
+// mobile and 4 from md up, so eight fills exactly two rows.
+const CATEGORY_TILES = [
+  { name: "Clothes", img: "https://images.unsplash.com/photo-1622290319146-7b63df48a635?w=600&q=80" },
+  { name: "Gear", img: "https://images.unsplash.com/photo-1773672268537-21e349bc7273?w=600&q=80" },
+  { name: "Nursery", img: "https://images.unsplash.com/photo-1749703827003-8e5046941847?w=600&q=80" },
+  { name: "Toys", img: "https://images.unsplash.com/photo-1637728226029-e590a9a16c4b?w=600&q=80" },
+  { name: "Food", img: "https://images.unsplash.com/photo-1627251425518-550ed68255ac?w=600&q=80" },
+  { name: "Essentials", img: "https://images.unsplash.com/photo-1737044248827-52004f1583dd?w=600&q=80" },
+  { name: "Safety", img: "https://images.unsplash.com/photo-1715869618915-a7bf6608d4c3?w=600&q=80" },
+  { name: "Bath", img: "https://images.unsplash.com/photo-1630304566704-780606056458?w=600&q=80" },
+];
+
+const FEATURES = [
+  { icon: Heart, title: "Gentle & safe", description: "Every product tested against the standards we'd want for our own." },
+  { icon: Shield, title: "Secure checkout", description: "Payments encrypted end to end. Card details never touch our servers." },
+  { icon: Truck, title: "Fast delivery", description: "Dispatched within 24 hours, tracked to your door across Nigeria." },
 ];
 
 const HomePage = () => {
   const [featured, setFeatured] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [paused, setPaused] = useState(false);
 
+  // The hero advances by itself, which is only acceptable while nobody is reading
+  // it — so it holds under the pointer, holds while one of its own controls has
+  // focus, and never starts at all for someone who asked for less motion. The
+  // reduced-motion block in index.css can't cover this: it only reaches CSS
+  // animations, and this is a timer.
   useEffect(() => {
+    if (paused || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
     const timer = setInterval(() => {
       setActiveSlide((prev) => (prev + 1) % HERO_SLIDES.length);
     }, 6000);
     return () => clearInterval(timer);
-  }, []);
+  }, [paused]);
 
   useEffect(() => {
     const fetchFeatured = async () => {
@@ -79,198 +101,202 @@ const HomePage = () => {
     fetchFeatured();
   }, []);
 
-  const features = [
-    {
-      icon: Heart,
-      title: "Gentle & Safe",
-      description: "Every product is carefully tested for your baby's comfort and safety.",
-    },
-    {
-      icon: Shield,
-      title: "Secure Checkout",
-      description: "Your payment information is always protected.",
-    },
-    {
-      icon: Truck,
-      title: "Fast Delivery",
-      description: "Quick and reliable shipping to your doorstep.",
-    },
-  ];
+  const slide = HERO_SLIDES[activeSlide];
 
   return (
-    <div className="animate-fade-in relative">
-      {/* Hero Carousel */}
-      <section className="relative h-[600px] sm:h-[700px] overflow-hidden bg-surface-50 dark:bg-surface-950">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeSlide}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 1, ease: "easeInOut" }}
-            className="absolute inset-0"
+    <div className="animate-fade-in">
+      {/* Hero — type on a calm ground, image beside it rather than beneath it */}
+      <section className="bg-gradient-to-b from-brand-50 to-surface-50">
+        <div className="container-page">
+          <div
+            className="grid items-center gap-10 py-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-16 lg:py-24"
+            onMouseEnter={() => setPaused(true)}
+            onMouseLeave={() => setPaused(false)}
+            onFocusCapture={() => setPaused(true)}
+            onBlurCapture={() => setPaused(false)}
           >
-            {/* Background Image */}
-            <div className="absolute inset-0">
-              <img
-                src={HERO_SLIDES[activeSlide].image}
-                alt={HERO_SLIDES[activeSlide].title}
-                className="w-full h-full object-cover scale-105"
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-surface-950/80 via-surface-950/40 to-transparent dark:from-surface-950 dark:via-surface-950/60" />
-            </div>
-
-            {/* Content */}
-            <div className="relative h-full mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex items-center">
-              <div className="max-w-2xl">
+            {/* Copy */}
+            <div className="max-w-xl">
+              <AnimatePresence mode="wait">
                 <motion.div
-                  initial={{ opacity: 0, y: 30 }}
+                  key={activeSlide}
+                  initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2, duration: 0.8 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
                 >
-                  <span className="inline-block px-3 py-1 rounded-full bg-brand-500/10 text-brand-500 text-xs font-semibold tracking-wider uppercase mb-6">
-                    {HERO_SLIDES[activeSlide].category}
-                  </span>
-                  <h1 className="font-display text-5xl sm:text-6xl lg:text-7xl font-semibold text-white tracking-tight leading-[1.05] mb-6">
-                    {HERO_SLIDES[activeSlide].title}{" "}
-                    <span className="text-brand-400 block sm:inline">
-                      {HERO_SLIDES[activeSlide].subtitle.split(" ").slice(0, 1)}
-                    </span>
-                    {" "}{HERO_SLIDES[activeSlide].subtitle.split(" ").slice(1).join(" ")}
+                  <p className="eyebrow text-brand-700">{slide.category}</p>
+                  {/* The second line used to sit at surface-400 on a near-white
+                      ground — around 2.5:1, well under the 3:1 large text needs —
+                      and broke to leave a single word stranded on its own line.
+                      It now carries the brand colour and balances its own wrap. */}
+                  <h1 className="mt-4 font-display text-[2.75rem] font-extrabold leading-[1.08] tracking-tight text-surface-900 text-balance sm:text-[3.25rem]">
+                    {slide.title}
+                    <span className="block text-brand-600">{slide.subtitle}</span>
                   </h1>
-                  <p className="text-xl text-surface-200 leading-relaxed mb-8 max-w-lg">
-                    {HERO_SLIDES[activeSlide].description}
+                  <p className="mt-6 max-w-md text-[1.0625rem] leading-relaxed text-surface-600 text-pretty">
+                    {slide.description}
                   </p>
-                  <div className="flex flex-wrap gap-4">
-                    <Link
-                      to="/products"
-                      className="inline-flex items-center gap-2 px-8 py-4 bg-brand-500 text-white text-sm font-semibold rounded-2xl hover:bg-brand-600 transition-all hover:scale-105 shadow-lg shadow-brand-500/20"
-                    >
-                      Shop Collection
-                      <ArrowRight className="w-4 h-4" />
-                    </Link>
-                  </div>
                 </motion.div>
+              </AnimatePresence>
+
+              <div className="mt-9 flex flex-wrap items-center gap-3">
+                <Link to="/products" className="btn btn-lg btn-primary">
+                  Shop the collection
+                  <ArrowRight className="w-4 h-4" strokeWidth={2} />
+                </Link>
+                <Link to="/products" className="btn btn-lg btn-secondary">
+                  Browse categories
+                </Link>
+              </div>
+
+              {/* Slide selector doubles as progress. The bar stays hairline-thin,
+                  but the button around it is a full 44px tall — the old control
+                  was 2px of tappable height, which no thumb can hit. */}
+              <div className="mt-7 flex items-center">
+                {HERO_SLIDES.map((item, index) => (
+                  <button
+                    key={item.category}
+                    onClick={() => setActiveSlide(index)}
+                    className="group grid h-11 place-items-center rounded-full px-1.5"
+                    aria-label={`Show ${item.category}`}
+                    aria-current={activeSlide === index}
+                  >
+                    <span
+                      className={`block h-[3px] rounded-full transition-all duration-500 ease-smooth ${
+                        activeSlide === index
+                          ? "w-10 bg-brand-600"
+                          : "w-5 bg-surface-300 group-hover:bg-surface-400"
+                      }`}
+                    />
+                  </button>
+                ))}
               </div>
             </div>
-          </motion.div>
-        </AnimatePresence>
 
-        {/* Carousel Indicators */}
-        <div className="absolute bottom-10 left-10 flex gap-3 z-20">
-          {HERO_SLIDES.map((_, index) => (
-            <button
-              key={index}
-              onClick={() => setActiveSlide(index)}
-              className={`h-1.5 rounded-full transition-all duration-500 ${
-                activeSlide === index ? "w-12 bg-brand-500" : "w-1.5 bg-white/40 hover:bg-white/60"
-              }`}
-              aria-label={`Go to slide ${index + 1}`}
-            />
-          ))}
+            {/* Image */}
+            <div className="relative">
+              {/* Was 5:6 on desktop, which left the copy column ending a third of
+                  the way up a very tall image. A square keeps the two columns
+                  close to the same height, so the hero stops opening on a band of
+                  empty ground beside the type. */}
+              <div className="relative aspect-[4/3] overflow-hidden rounded-4xl bg-surface-200 shadow-prominent lg:aspect-square">
+                <AnimatePresence mode="popLayout">
+                  <motion.img
+                    key={activeSlide}
+                    src={slide.image}
+                    alt={slide.title}
+                    initial={{ opacity: 0, scale: 1.04 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                </AnimatePresence>
+              </div>
+              <div className="pointer-events-none absolute -right-10 -top-10 -z-10 h-64 w-64 rounded-full bg-brand-200/40 blur-3xl" />
+            </div>
+          </div>
         </div>
-
-        {/* Floating gradient */}
-        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-brand-500/10 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
       </section>
 
-      {/* Features */}
-      <section className="border-t border-surface-200/60 dark:border-surface-800/60 bg-surface-50/50 dark:bg-surface-900/50">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {features.map((feature, i) => (
-              <motion.div
-                key={feature.title}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1, duration: 0.5 }}
-                className="flex items-start gap-4"
-              >
-                <div className="p-2.5 rounded-xl bg-brand-50 dark:bg-brand-900/20">
-                  <feature.icon className="w-5 h-5 text-brand-500" />
-                </div>
+      {/* Promise row */}
+      <section className="border-y hairline bg-white">
+        <div className="container-page">
+          <div className="grid gap-10 py-12 sm:grid-cols-3 sm:gap-8">
+            {FEATURES.map((feature) => (
+              <div key={feature.title} className="flex items-start gap-4">
+                <feature.icon className="mt-0.5 w-5 h-5 shrink-0 text-brand-600" strokeWidth={1.75} />
                 <div>
-                  <h3 className="font-medium text-surface-900 dark:text-surface-100 mb-1">
-                    {feature.title}
-                  </h3>
-                  <p className="text-sm text-surface-500 dark:text-surface-400 leading-relaxed">
+                  <h3 className="text-sm font-medium text-surface-900">{feature.title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-surface-500 text-pretty">
                     {feature.description}
                   </p>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
       {/* Categories */}
-      <section className="border-t border-surface-200/60 dark:border-surface-800/60 bg-white dark:bg-surface-950">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
-          <div className="text-center mb-10">
-            <h2 className="font-display text-2xl sm:text-3xl font-semibold text-surface-900 dark:text-surface-50">Shop by Category</h2>
+      <section className="container-page py-20">
+        <div className="mb-10 flex items-end justify-between gap-6">
+          <div>
+            <p className="eyebrow">Browse</p>
+            <h2 className="mt-2 font-display text-3xl font-extrabold text-surface-900 sm:text-[2.5rem]">
+              Shop by category
+            </h2>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
-            {[
-              { name: "Clothes", img: "https://images.unsplash.com/photo-1519689680058-324335c77eba?w=500&q=80" },
-              { name: "Gear", img: "https://images.unsplash.com/photo-1491013516836-7dbf43681043?w=500&q=80" },
-              { name: "Nursery", img: "https://images.unsplash.com/photo-1555022839-843343cb43a6?w=500&q=80" },
-              { name: "Toys", img: "https://images.unsplash.com/photo-1555985202-12975b0235dc?w=500&q=80" }
-            ].map((cat) => (
-              <Link key={cat.name} to="/products" className="group relative block overflow-hidden rounded-2xl aspect-[4/5]">
-                <img src={cat.img} alt={cat.name} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 text-center">
-                  <span className="text-white font-medium text-lg tracking-wide">{cat.name}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4 sm:gap-6">
+          {CATEGORY_TILES.map((cat) => (
+            <Link key={cat.name} to="/products" className="group">
+              <div className="relative aspect-[4/5] overflow-hidden rounded-3xl bg-surface-100">
+                <img
+                  src={cat.img}
+                  alt={cat.name}
+                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-smooth group-hover:scale-[1.05]"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-surface-950/55 via-surface-950/5 to-transparent" />
+                <span className="absolute bottom-4 left-4 text-[0.9375rem] font-medium text-white">
+                  {cat.name}
+                </span>
+              </div>
+            </Link>
+          ))}
         </div>
       </section>
 
-      {/* Featured Products */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
-        <div className="flex items-center justify-between mb-10">
+      {/* Featured */}
+      <section className="container-page pb-24">
+        <div className="mb-10 flex items-end justify-between gap-6">
           <div>
-            <h2 className="font-display text-2xl sm:text-3xl font-semibold text-surface-900 dark:text-surface-50">
-              Featured Products
+            <p className="eyebrow">Selected</p>
+            <h2 className="mt-2 font-display text-3xl font-extrabold text-surface-900 sm:text-[2.5rem]">
+              Featured products
             </h2>
-            <p className="mt-2 text-surface-500 dark:text-surface-400">
-              Our top picks for you
-            </p>
           </div>
           <Link
             to="/products"
-            className="hidden sm:flex items-center gap-1.5 text-sm font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 transition-colors"
+            className="hidden shrink-0 items-center gap-1.5 text-sm font-medium text-surface-600 transition-colors hover:text-surface-900 sm:inline-flex"
           >
             View all
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
           </Link>
         </div>
 
         {loading ? (
-          <LoadingSpinner size="lg" className="py-20" />
+          <div className="grid grid-cols-2 gap-x-5 gap-y-8 lg:grid-cols-4 sm:gap-x-6">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i}>
+                <div className="skeleton aspect-[4/5]" />
+                <div className="skeleton mt-4 h-3 w-16" />
+                <div className="skeleton mt-2 h-4 w-3/4" />
+              </div>
+            ))}
+          </div>
         ) : featured.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 gap-x-5 gap-y-8 lg:grid-cols-4 sm:gap-x-6">
             {featured.slice(0, 8).map((product) => (
-              <ProductCard key={product._id} product={product} />
+              <ProductCard key={product._id} product={product} showFeaturedBadge={false} />
             ))}
           </div>
         ) : (
-          <div className="text-center py-20">
-            <p className="text-surface-400 dark:text-surface-500">
-              No featured products available yet.
+          <div className="card grid place-items-center px-6 py-20 text-center">
+            <p className="text-surface-600">No featured products yet</p>
+            <p className="mt-1 text-sm text-surface-500">
+              Featured items will appear here once they're marked in the dashboard.
             </p>
           </div>
         )}
 
-        <div className="mt-8 sm:hidden text-center">
-          <Link
-            to="/products"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 dark:text-brand-400"
-          >
+        <div className="mt-10 text-center sm:hidden">
+          <Link to="/products" className="btn btn-secondary">
             View all products
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="w-4 h-4" strokeWidth={1.75} />
           </Link>
         </div>
       </section>
